@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { getAuth, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { db } from "@/src/lib/firebase"; // Assuming your Firestore instance
+import { db } from "@/lib/firebase"; // Assuming your Firestore instance
 import {
   collection,
   doc,

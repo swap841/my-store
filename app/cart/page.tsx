@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { db } from "@/src/lib/firebase";
+import { db } from "@/lib/firebase";
 import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 
 interface CartItem {

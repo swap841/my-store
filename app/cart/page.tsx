@@ -4,7 +4,8 @@ import React from 'react';
 import { useCart } from '@/components/CartContext';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import styles from './Cart.module.css';
+<div className="p-4 text-gray-800">
+
 
 const Cart: React.FC = () => {
   const {

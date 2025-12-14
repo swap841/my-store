@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import { getAuth, signOut, User } from "firebase/auth";
 import { useRouter } from "next/navigation";
-import { db } from "@/lib/firebase"; // Assuming your Firestore instance
+import { db } from "@/lib/firebase";
 import {
   collection,
   doc,
@@ -14,25 +14,32 @@ import {
   orderBy,
   addDoc,
   setDoc,
-  Timestamp, // Required for reorder date
+  Timestamp,
 } from "firebase/firestore";
 
 // --- Type Definitions ---
 type OrderItem = {
-  productId: string;
+  id: string;
   name: string;
-  quantity: number;
   price: number;
+  quantity: number;
+  image: string;
 };
 
 type Order = {
   id: string;
-  // Ensure date can handle both Timestamp and a structure with seconds
-  date: Timestamp | { seconds: number }; 
+  createdAt: Timestamp | { seconds: number };
+  date: Timestamp | { seconds: number };
   items: OrderItem[];
   totalAmount: number;
-  status: "pending" | "dispatched" | "delivered";
+  status: string;
   deliveryAddress: string;
+  location?: {
+    lat: number;
+    lng: number;
+    name: string;
+    phone: string;
+  };
   phone?: string;
 };
 
@@ -42,6 +49,11 @@ type CustomerData = {
   address: string;
   geolocation: string;
 };
+
+// Define which statuses are considered "current" vs "past"
+// Using lowercase for comparison
+const CURRENT_STATUSES = ["pending", "dispatched", "processing", "confirmed", "shipped"];
+const PAST_STATUSES = ["delivered", "completed", "fulfilled", "cancelled"];
 
 export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
@@ -53,6 +65,7 @@ export default function ProfilePage() {
   });
   const [currentOrders, setCurrentOrders] = useState<Order[]>([]);
   const [pastOrders, setPastOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
   const auth = getAuth();
   const router = useRouter();
 
@@ -64,7 +77,6 @@ export default function ProfilePage() {
       if (docSnap.exists()) {
         setCustomerData(docSnap.data() as CustomerData);
       } else {
-        // Fallback: Use Firebase Auth name if user doc doesn't exist
         setCustomerData((prev) => ({
           ...prev,
           name: displayName || "",
@@ -81,6 +93,8 @@ export default function ProfilePage() {
       setUser(currentUser);
       if (currentUser) {
         fetchCustomerData(currentUser.uid, currentUser.displayName);
+      } else {
+        setLoading(false);
       }
     });
     return () => unsubscribe();
@@ -90,52 +104,102 @@ export default function ProfilePage() {
   useEffect(() => {
     if (!user) return;
 
+    setLoading(true);
+    
     // Listen to the orders subcollection for the current user
     const ordersRef = collection(db, "users", user.uid, "orders");
     const q = query(ordersRef, orderBy("date", "desc"));
 
     const unsubscribeOrders = onSnapshot(q, (snapshot) => {
-      const orders: Order[] = snapshot.docs.map((doc) => {
-        const data = doc.data();
-        
-        // Ensure date field is handled correctly, prioritizing Firestore Timestamp
-        let dateValue: Timestamp | { seconds: number } = data.date;
-        if (data.date && data.date.seconds) {
-            dateValue = { seconds: data.date.seconds };
-        } else if (data.date instanceof Date) {
-            // Handle if it was incorrectly saved as a JS Date
-            dateValue = { seconds: data.date.getTime() / 1000 };
-        } else {
-            // Fallback for empty/bad date
-            dateValue = { seconds: Date.now() / 1000 }; 
-        }
+      const orders: Order[] = [];
+      
+      snapshot.forEach((doc) => {
+        try {
+          const data = doc.data();
+          
+          console.log("Order data:", data);
+          
+          // Handle date field - use createdAt or date, whichever exists
+          let dateValue: Timestamp | { seconds: number };
+          const dateField = data.date || data.createdAt;
+          
+          if (dateField && typeof dateField.toDate === 'function') {
+            // It's a Firestore Timestamp
+            dateValue = dateField;
+          } else if (dateField && dateField.seconds) {
+            // It's a timestamp object with seconds
+            dateValue = { seconds: dateField.seconds };
+          } else if (dateField instanceof Date) {
+            // It's a JS Date object
+            dateValue = { seconds: Math.floor(dateField.getTime() / 1000) };
+          } else if (dateField) {
+            // Try to parse whatever we have
+            const timestamp = new Date(dateField).getTime();
+            dateValue = { seconds: Math.floor(timestamp / 1000) };
+          } else {
+            // Fallback to current time
+            dateValue = { seconds: Math.floor(Date.now() / 1000) };
+          }
 
-        return {
-          id: doc.id,
-          // Cast the rest of the data
-          ...(data as Omit<Order, "id" | "date">),
-          date: dateValue, // Use the processed date
-        } as Order;
+          // Create order object
+          const order: Order = {
+            id: doc.id,
+            createdAt: dateValue,
+            date: dateValue,
+            items: data.items || [],
+            totalAmount: data.totalAmount || 0,
+            status: data.status || "pending",
+            deliveryAddress: data.deliveryAddress || data.location?.name || "",
+            location: data.location,
+            phone: data.phone || data.location?.phone || "",
+          };
+
+          orders.push(order);
+        } catch (error) {
+          console.error(`Error processing order ${doc.id}:`, error);
+        }
+      });
+
+      // Debug: Log all orders and their statuses
+      console.log("All orders:", orders.map(o => ({ 
+        id: o.id, 
+        status: o.status,
+        statusLower: o.status.toLowerCase()
+      })));
+      
+      // Filter orders based on status (case-insensitive comparison)
+      const current = orders.filter((order) => {
+        const statusLower = order.status.toLowerCase();
+        return CURRENT_STATUSES.includes(statusLower);
       });
       
-      setCurrentOrders(
-        orders.filter((o) => o.status === "pending" || o.status === "dispatched")
-      );
-      setPastOrders(orders.filter((o) => o.status === "delivered"));
+      const past = orders.filter((order) => {
+        const statusLower = order.status.toLowerCase();
+        return PAST_STATUSES.includes(statusLower);
+      });
+
+      // Debug: Log filtered results
+      console.log("Current orders count:", current.length);
+      console.log("Past orders count:", past.length);
+      console.log("Current statuses:", CURRENT_STATUSES);
+      console.log("Past statuses:", PAST_STATUSES);
+      
+      setCurrentOrders(current);
+      setPastOrders(past);
+      setLoading(false);
     }, (error) => {
-        console.error("Error fetching orders:", error);
+      console.error("Error fetching orders:", error);
+      setLoading(false);
     });
 
     return () => unsubscribeOrders();
   }, [user]);
 
   // --- Handlers ---
-
   const handleLogout = async () => {
     await signOut(auth);
-    router.push("//");
+    router.push("/");
   };
-
 
   const handleSaveProfile = async () => {
     if (!user) return;
@@ -157,7 +221,8 @@ export default function ProfilePage() {
         items: order.items,
         totalAmount: order.totalAmount,
         status: "pending",
-        date: Timestamp.now(), // Use Timestamp for consistent saving
+        date: Timestamp.now(),
+        createdAt: Timestamp.now(),
         deliveryAddress: customerData.address || "",
         phone: customerData.phone || "",
       });
@@ -167,14 +232,67 @@ export default function ProfilePage() {
     }
   };
 
-  // --- Render ---
+  // Get status display color
+  const getStatusColor = (status: string) => {
+    const statusLower = status.toLowerCase();
+    if (CURRENT_STATUSES.includes(statusLower)) {
+      if (statusLower === "pending") return "bg-yellow-500";
+      if (statusLower === "dispatched") return "bg-blue-500";
+      if (statusLower === "processing") return "bg-orange-500";
+      return "bg-blue-500";
+    }
+    if (PAST_STATUSES.includes(statusLower)) {
+      if (statusLower === "cancelled") return "bg-red-500";
+      return "bg-green-500";
+    }
+    return "bg-gray-500";
+  };
 
-  if (!user)
+  // Get status display text
+  const getStatusText = (status: string) => {
+    return status.toUpperCase();
+  };
+
+  // Get address from order
+  const getOrderAddress = (order: Order) => {
+    if (order.deliveryAddress) return order.deliveryAddress;
+    if (order.location?.name) return order.location.name;
+    return "Address not specified";
+  };
+
+  // Get phone from order
+  const getOrderPhone = (order: Order) => {
+    if (order.phone) return order.phone;
+    if (order.location?.phone) return order.location.phone;
+    return "Phone not specified";
+  };
+
+  // Get date from order
+  const getOrderDate = (order: Order) => {
+    try {
+      const timestamp = order.date || order.createdAt;
+      if (timestamp && typeof timestamp === 'object') {
+        const seconds = (timestamp as any).seconds || 
+                       (timestamp as any)._seconds || 
+                       (timestamp as any)?.toDate?.()?.getTime() / 1000;
+        if (seconds) {
+          return new Date(seconds * 1000).toLocaleString();
+        }
+      }
+      return "Date not available";
+    } catch (error) {
+      return "Date not available";
+    }
+  };
+
+  // --- Render ---
+  if (!user) {
     return (
       <div className="p-8 text-center">
         <p>Please login to view your profile.</p>
       </div>
     );
+  }
 
   return (
     <div className="p-8 mt-20 max-w-7xl mx-auto flex gap-8">
@@ -201,7 +319,7 @@ export default function ProfilePage() {
           />
         </div>
         
-        {/* Email, Phone, Address Inputs (unchanged) */}
+        {/* Email, Phone, Address Inputs */}
         <div className="w-full mb-2">
           <label className="block text-gray-600 mb-1">Email</label>
           <input
@@ -228,18 +346,19 @@ export default function ProfilePage() {
             onChange={(e) => setCustomerData({ ...customerData, address: e.target.value })}
             className="w-full p-2 border rounded-lg"
             placeholder="Delivery address"
+            rows={3}
           />
         </div>
         <div className="flex gap-4 mt-2">
           <button
             onClick={handleSaveProfile}
-            className="px-6 py-2 bg-green-600 text-white rounded-lg"
+            className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
           >
             Save
           </button>
           <button
             onClick={handleLogout}
-            className="px-6 py-2 bg-red-500 text-white rounded-lg"
+            className="px-6 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
           >
             Logout
           </button>
@@ -248,110 +367,119 @@ export default function ProfilePage() {
 
       {/* Right: Orders Display */}
       <div className="w-2/3 flex flex-col gap-6">
-        {/* Current Orders */}
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h2 className="text-2xl font-semibold mb-4">Current Orders</h2>
-          {currentOrders.length === 0 ? (
-            <p>No pending orders.</p>
-          ) : (
-            <div className="space-y-4">
-              {currentOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="p-4 border rounded-lg shadow hover:shadow-md transition"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <p>
-                      <strong>Order ID:</strong> {order.id}
-                    </p>
-                    <span
-                      className={`px-3 py-1 rounded-full text-white ${
-                        order.status === "pending"
-                          ? "bg-yellow-500"
-                          : "bg-blue-500"
-                      }`}
+        {loading ? (
+          <div className="text-center py-8">
+            <p>Loading orders...</p>
+          </div>
+        ) : (
+          <>
+            {/* Current Orders */}
+            <div className="bg-white shadow-md rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Current Orders</h2>
+              {currentOrders.length === 0 ? (
+                <p className="text-gray-500">No current orders.</p>
+              ) : (
+                <div className="space-y-4">
+                  {currentOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="p-4 border rounded-lg shadow hover:shadow-md transition"
                     >
-                      {order.status.toUpperCase()}
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Date:</strong>{" "}
-                    {/* Access date using seconds property */}
-                    {new Date(order.date.seconds * 1000).toLocaleString()}
-                  </p>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Delivery Address:</strong> {order.deliveryAddress}
-                  </p>
-                  <p className="text-gray-800 font-semibold mb-2">
-                    Total: ₹{order.totalAmount}
-                  </p>
-                  <div>
-                    <p className="font-semibold">Items:</p>
-                    <ul className="list-disc ml-5">
-                      {order.items.map((item, idx) => (
-                        <li key={idx}>
-                          {item.name} x {item.quantity} - ₹{item.price}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="font-medium">
+                          Order: {order.id.substring(0, 8)}...
+                        </p>
+                        <span
+                          className={`px-3 py-1 rounded-full text-white ${getStatusColor(order.status)}`}
+                        >
+                          {getStatusText(order.status)}
+                        </span>
+                      </div>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Date:</strong> {getOrderDate(order)}
+                      </p>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Delivery Address:</strong> {getOrderAddress(order)}
+                      </p>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Phone:</strong> {getOrderPhone(order)}
+                      </p>
+                      <p className="text-gray-800 font-semibold mb-2">
+                        Total: ₹{order.totalAmount.toFixed(2)}
+                      </p>
+                      <div>
+                        <p className="font-semibold">Items:</p>
+                        <ul className="list-disc ml-5">
+                          {order.items.map((item, idx) => (
+                            <li key={idx} className="text-gray-700">
+                              {item.name} x {item.quantity} - ₹{item.price.toFixed(2)}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Previous Orders */}
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h2 className="text-2xl font-semibold mb-4">Previous Orders</h2>
-          {pastOrders.length === 0 ? (
-            <p>No previous orders.</p>
-          ) : (
-            <div className="space-y-4">
-              {pastOrders.map((order) => (
-                <div
-                  key={order.id}
-                  className="p-4 border rounded-lg shadow hover:shadow-md transition bg-gray-50"
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <p>
-                      <strong>Order ID:</strong> {order.id}
-                    </p>
-                    <span className="px-3 py-1 rounded-full text-white bg-green-500">
-                      DELIVERED
-                    </span>
-                  </div>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Date:</strong>{" "}
-                    {new Date(order.date.seconds * 1000).toLocaleString()}
-                  </p>
-                  <p className="text-gray-600 mb-2">
-                    <strong>Delivery Address:</strong> {order.deliveryAddress}
-                  </p>
-                  <p className="text-gray-800 font-semibold mb-2">
-                    Total: ₹{order.totalAmount}
-                  </p>
-                  <div>
-                    <p className="font-semibold">Items:</p>
-                    <ul className="list-disc ml-5 mb-2">
-                      {order.items.map((item, idx) => (
-                        <li key={idx}>
-                          {item.name} x {item.quantity} - ₹{item.price}
-                        </li>
-                      ))}
-                    </ul>
-                    <button
-                      onClick={() => handleReorder(order)}
-                      className="px-4 py-1 bg-green-600 text-white rounded-lg"
+            {/* Previous Orders */}
+            <div className="bg-white shadow-md rounded-lg p-6">
+              <h2 className="text-2xl font-semibold mb-4">Previous Orders</h2>
+              {pastOrders.length === 0 ? (
+                <p className="text-gray-500">No previous orders.</p>
+              ) : (
+                <div className="space-y-4">
+                  {pastOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      className="p-4 border rounded-lg shadow hover:shadow-md transition bg-gray-50"
                     >
-                      Order Again
-                    </button>
-                  </div>
+                      <div className="flex justify-between items-center mb-2">
+                        <p className="font-medium">
+                          Order: {order.id.substring(0, 8)}...
+                        </p>
+                        <span
+                          className={`px-3 py-1 rounded-full text-white ${getStatusColor(order.status)}`}
+                        >
+                          {getStatusText(order.status)}
+                        </span>
+                      </div>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Date:</strong> {getOrderDate(order)}
+                      </p>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Delivery Address:</strong> {getOrderAddress(order)}
+                      </p>
+                      <p className="text-gray-600 mb-2">
+                        <strong>Phone:</strong> {getOrderPhone(order)}
+                      </p>
+                      <p className="text-gray-800 font-semibold mb-2">
+                        Total: ₹{order.totalAmount.toFixed(2)}
+                      </p>
+                      <div>
+                        <p className="font-semibold">Items:</p>
+                        <ul className="list-disc ml-5 mb-3">
+                          {order.items.map((item, idx) => (
+                            <li key={idx} className="text-gray-700">
+                              {item.name} x {item.quantity} - ₹{item.price.toFixed(2)}
+                            </li>
+                          ))}
+                        </ul>
+                        <button
+                          onClick={() => handleReorder(order)}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          Order Again
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

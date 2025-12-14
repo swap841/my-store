@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-// --- 1. Import useRouter from Next.js ---
 import { useRouter } from "next/navigation"; 
 import {
   getAuth,
@@ -14,13 +13,18 @@ import {
   User,
 } from "firebase/auth";
 import { app } from "@/firebaseConfig";
+// Import cart context
+import { useCart } from "@/components/CartContext";
+import { ShoppingCart } from 'lucide-react';
 
 const auth = getAuth(app);
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
-  // --- 2. Initialize the router object ---
   const router = useRouter(); 
+  
+  // Get cart data
+  const { totalItems, subtotal, openCart } = useCart();
 
   // Listen for authentication state changes
   useEffect(() => {
@@ -41,10 +45,8 @@ export default function Navbar() {
 
   const logoutUser = async () => {
     await signOut(auth);
-    // --- 3. Correct the push path to "/products" ---
     router.push("/products"); 
   };
-
 
   return (
     <nav className="w-full bg-white shadow-md fixed top-0 left-0 z-50">
@@ -54,6 +56,20 @@ export default function Navbar() {
         </Link>
 
         <div className="flex items-center gap-4">
+          {/* Cart Button */}
+          <button
+            onClick={openCart}
+            className="flex items-center gap-2 bg-green-50 text-green-700 px-3 py-2 rounded-lg hover:bg-green-100 transition-colors"
+          >
+            <ShoppingCart size={20} />
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-medium">
+                {totalItems === 0 ? "0 Items" : `${totalItems} Item${totalItems > 1 ? 's' : ''}`}
+              </span>
+              <span className="font-bold">₹{subtotal}</span>
+            </div>
+          </button>
+
           {user ? (
             <>
               {/* Clicking profile image navigates to /profile */}
@@ -68,7 +84,7 @@ export default function Navbar() {
               </Link>
               <button
                 onClick={logoutUser}
-                className="px-4 py-1 bg-red-500 text-white rounded-lg"
+                className="px-4 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
               >
                 Logout
               </button>
@@ -76,7 +92,7 @@ export default function Navbar() {
           ) : (
             <button
               onClick={loginWithGoogle}
-              className="px-4 py-1 bg-green-600 text-white rounded-lg"
+              className="px-4 py-1 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
             >
               Sign In with Google
             </button>

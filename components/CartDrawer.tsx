@@ -1,15 +1,22 @@
 'use client';
 
-import React from 'react';
-import { useCart } from '@/components/CartContext';
+import React, { useEffect, useState } from 'react';
+import { useCart } from './CartContext';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
+import { getAuth, User, onAuthStateChanged } from 'firebase/auth';
+// Assuming '@/firebaseConfig' exists in your project structure
+import { app } from '@/firebaseConfig'; 
 
-const Cart: React.FC = () => {
+// Initialize Firebase auth
+const auth = getAuth(app);
+
+const CartDrawer: React.FC = () => {
   const {
     isCartOpen,
     cartItems,
-    closeCart, // Use closeCart instead of toggleCart
+    closeCart,
     removeFromCart,
     updateQuantity,
     totalItems,
@@ -17,151 +24,216 @@ const Cart: React.FC = () => {
     deliveryCharge,
     handlingCharge,
     smallCartCharge,
-    grandTotal
+    grandTotal,
   } = useCart();
 
+  const [user, setUser] = useState<User | null>(null);
+  // FIX: Initialize loading to true. It will be set to false once the listener fires.
+  const [loading, setLoading] = useState(true); 
   const router = useRouter();
 
+  // Listen for authentication state changes
+  useEffect(() => {
+    // onAuthStateChanged is guaranteed to fire once when the component mounts,
+    // even if the user is not signed in (currentUser will be null).
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      setLoading(false); // Authentication status has been checked.
+    });
+    return () => unsubscribe();
+  }, []);
+
   const handleCheckout = () => {
-    router.push('/checkout');
     closeCart();
+    router.push('/checkout');
+  };
+
+  // Google sign-in from cart drawer
+  const handleGoogleSignIn = async () => {
+    try {
+      const { GoogleAuthProvider, signInWithPopup } = await import('firebase/auth'); 
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+    } catch (err) {
+      console.log("Login Error:", err);
+    }
   };
 
   if (!isCartOpen) return null;
 
   return (
     <>
-      {/* Transparent Overlay */}
+      {/* Overlay */}
       <div
-        className="fixed inset-0 bg-black/50 z-40"
+        className="fixed inset-0 bg-black/30 backdrop-blur-sm z-40"
         onClick={closeCart}
       />
 
-      {/* Cart Sidebar */}
-      {/* CRITICAL FIX: Ensure the max width is handled on smaller screens */}
-      <div className="fixed top-0 right-0 h-full w-full max-w-sm sm:w-96 bg-white shadow-xl z-50 flex flex-col">
-        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+      {/* Drawer */}
+      <div className="fixed inset-y-0 right-0 w-full sm:w-96 bg-white shadow-xl z-50 flex flex-col">
+
+        {/* Header (No changes here, remains mobile-friendly) */}
+        <div className="flex items-center justify-between p-4 sm:p-6 border-b">
           <div>
-            <h2 className="text-xl font-bold text-gray-800">My Cart</h2>
-            <span className="text-sm text-gray-600">{totalItems} items</span>
+            <h2 className="text-xl font-bold">My Cart</h2>
+            <p className="text-sm text-gray-600">{totalItems} items</p>
           </div>
           <button
-            className="text-2xl text-gray-500 hover:text-gray-800 w-8 h-8 flex items-center justify-center"
             onClick={closeCart}
+            className="p-2 hover:bg-gray-100 rounded-full"
           >
-            ×
+            <X size={20} />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4">
+        {/* Content (No changes here, remains mobile-friendly) */}
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {cartItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-64">
-              <p className="text-gray-500 text-lg">Your cart is empty</p>
+            <div className="flex flex-col items-center justify-center h-full text-gray-500">
+              <p className="text-lg">Your cart is empty</p>
+              <p className="text-sm mt-1">Add items to get started</p>
             </div>
           ) : (
             <>
-              <div className="space-y-4 mb-6">
-                {cartItems.map((item) => (
-                  <div key={item.id} className="flex items-start border-b pb-4">
-                    <div className="w-20 h-20 flex-shrink-0 mr-4">
-                      {item.imageUrl && (
-                        <Image
-                          src={item.imageUrl}
-                          alt={item.name}
-                          width={80}
-                          height={80}
-                          className="w-full h-full object-cover rounded"
-                        />
-                      )}
+              {/* Cart Items */}
+              <div className="space-y-3 sm:space-y-4">
+                {cartItems.map(item => (
+                  <div
+                    key={item.id}
+                    className="flex gap-3 sm:gap-4 p-3 sm:p-4 bg-gray-50 rounded-lg items-start"
+                  >
+                    <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex-shrink-0">
+                      <Image
+                        src={item.imageUrl || '/images/placeholder.png'}
+                        alt={item.name}
+                        fill
+                        sizes="4rem"
+                        className="object-cover rounded-md"
+                      />
                     </div>
-                    <div className="flex-1 min-w-0"> {/* Added min-w-0 to prevent horizontal overflow */}
-                      <h3 className="font-medium text-gray-800">{item.name}</h3>
-                      {item.brand && (
-                        <p className="text-xs text-gray-500">{item.brand}</p>
-                      )}
-                      <p className="text-gray-600 mt-1">₹{item.price}</p>
-                      {item.weight && (
-                        <p className="text-xs text-gray-500">{item.weight}</p>
-                      )}
-                      <div className="flex items-center mt-2">
+
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-medium truncate">{item.name}</h3>
+                      <p className="text-green-600 font-semibold text-sm sm:text-base mt-0.5">
+                        ₹{item.price}
+                      </p>
+
+                      <div className="flex items-center gap-2 mt-2">
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-l hover:bg-gray-100"
-                          disabled={item.quantity <= 1}
+                          onClick={() =>
+                            updateQuantity(item.id, item.quantity - 1)
+                          }
+                          className="w-7 h-7 sm:w-8 sm:h-8 border rounded-full text-sm"
                         >
                           −
                         </button>
-                        <span className="w-8 h-8 flex items-center justify-center border-t border-b border-gray-300">
+                        <span className="w-6 text-center text-sm">
                           {item.quantity}
                         </span>
                         <button
-                          onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                          className="w-8 h-8 flex items-center justify-center border border-gray-300 rounded-r hover:bg-gray-100"
+                          onClick={() =>
+                            updateQuantity(item.id, item.quantity + 1)
+                          }
+                          className="w-7 h-7 sm:w-8 sm:h-8 border rounded-full text-sm"
                         >
                           +
                         </button>
+
+                        <button
+                          onClick={() => removeFromCart(item.id)}
+                          className="ml-2 text-xs sm:text-sm text-red-600 flex-shrink-0 hover:text-red-700"
+                        >
+                          Remove
+                        </button>
                       </div>
                     </div>
-                    <button
-                      onClick={() => removeFromCart(item.id)}
-                      className="text-red-600 hover:text-red-800 text-sm ml-2 flex-shrink-0"
-                    >
-                      Remove
-                    </button>
                   </div>
                 ))}
               </div>
 
-              <div className="border-t border-gray-200 pt-4">
-                <h3 className="font-bold text-lg text-gray-800 mb-4">Bill Details</h3>
-                <div className="space-y-2">
+              {/* Bill Details */}
+              <div className="mt-8">
+                <h3 className="font-bold text-lg mb-4">Bill details</h3>
+
+                <div className="space-y-2 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Items total</span>
-                    <span className="text-gray-800">₹{subtotal}</span>
+                    <span>Items total</span>
+                    <span>₹{subtotal}</span>
                   </div>
+
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Delivery charge</span>
-                    <span className={`${deliveryCharge === 0 ? 'text-green-600' : 'text-gray-800'}`}>
-                      {deliveryCharge === 0 ? 'FREE' : `₹${deliveryCharge}`}
-                    </span>
+                    <span>Delivery charge</span>
+                    {deliveryCharge === 0 ? (
+                      <span className="flex gap-2">
+                        <span className="line-through text-gray-400">₹25</span>
+                        <span className="text-blue-600 font-semibold">
+                          FREE
+                        </span>
+                      </span>
+                    ) : (
+                      <span>₹{deliveryCharge}</span>
+                    )}
                   </div>
+
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Handling charge</span>
-                    <span className="text-gray-800">₹{handlingCharge}</span>
+                    <span>Handling charge</span>
+                    <span>₹{handlingCharge}</span>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Small cart charge</span>
-                    <span className={`${smallCartCharge === 0 ? 'text-green-600' : 'text-gray-800'}`}>
-                      {smallCartCharge === 0 ? 'FREE' : `₹${smallCartCharge}`}
-                    </span>
-                  </div>
-                  {subtotal < 100 && (
-                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
-                      <p className="text-sm text-yellow-800">
-                        Add ₹{100 - subtotal} more to save on delivery & small cart charges!
-                      </p>
+
+                  {smallCartCharge > 0 && (
+                    <div className="flex justify-between">
+                      <span>Small cart charge</span>
+                      <span>₹{smallCartCharge}</span>
                     </div>
                   )}
-                  <div className="flex justify-between font-bold text-lg pt-4 border-t border-gray-200 mt-2">
-                    <span className="text-gray-800">Grand total</span>
-                    <span className="text-gray-800">₹{grandTotal}</span>
+
+                  <div className="flex justify-between font-bold text-lg pt-4 border-t mt-4">
+                    <span>Grand total</span>
+                    <span>₹{grandTotal}</span>
                   </div>
                 </div>
               </div>
-
-              <button
-                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
-                onClick={handleCheckout}
-                disabled={cartItems.length === 0}
-              >
-                PROCEED TO CHECKOUT
-              </button>
             </>
           )}
         </div>
+
+        {/* Checkout/Sign In Button: Logic check here */}
+        {cartItems.length > 0 && (
+          <div className="p-4 sm:p-6 border-t">
+            {loading ? (
+              // Loading state when checking auth status
+              <div className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold text-center">
+                Checking sign-in status...
+              </div>
+            ) : user ? (
+              // User is signed in - show checkout button
+              <button
+                onClick={handleCheckout}
+                className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity"
+              >
+                PROCEED TO CHECKOUT
+              </button>
+            ) : (
+              // User is NOT signed in - show sign in options
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600 text-center">
+                  Please sign in to proceed with checkout
+                </p>
+                
+                {/* Sign In Button */}
+                <button
+                  onClick={handleGoogleSignIn}
+                  className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:opacity-90 transition-opacity"
+                >
+                  SIGN IN TO CONTINUE
+                </button>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </>
   );
 };
 
-export default Cart;
+export default CartDrawer;

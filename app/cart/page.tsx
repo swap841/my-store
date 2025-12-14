@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { useCart } from '@/contexts/CartContext';
+import { useCart } from '@/components/CartContext';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import styles from './Cart.module.css';

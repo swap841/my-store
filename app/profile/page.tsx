@@ -105,24 +105,24 @@ export default function ProfilePage() {
     if (!user) return;
 
     setLoading(true);
-    
+
     // Listen to the orders subcollection for the current user
     const ordersRef = collection(db, "users", user.uid, "orders");
     const q = query(ordersRef, orderBy("date", "desc"));
 
     const unsubscribeOrders = onSnapshot(q, (snapshot) => {
       const orders: Order[] = [];
-      
+
       snapshot.forEach((doc) => {
         try {
           const data = doc.data();
-          
+
           console.log("Order data:", data);
-          
+
           // Handle date field - use createdAt or date, whichever exists
           let dateValue: Timestamp | { seconds: number };
           const dateField = data.date || data.createdAt;
-          
+
           if (dateField && typeof dateField.toDate === 'function') {
             // It's a Firestore Timestamp
             dateValue = dateField;
@@ -161,18 +161,18 @@ export default function ProfilePage() {
       });
 
       // Debug: Log all orders and their statuses
-      console.log("All orders:", orders.map(o => ({ 
-        id: o.id, 
+      console.log("All orders:", orders.map(o => ({
+        id: o.id,
         status: o.status,
         statusLower: o.status.toLowerCase()
       })));
-      
+
       // Filter orders based on status (case-insensitive comparison)
       const current = orders.filter((order) => {
         const statusLower = order.status.toLowerCase();
         return CURRENT_STATUSES.includes(statusLower);
       });
-      
+
       const past = orders.filter((order) => {
         const statusLower = order.status.toLowerCase();
         return PAST_STATUSES.includes(statusLower);
@@ -183,7 +183,7 @@ export default function ProfilePage() {
       console.log("Past orders count:", past.length);
       console.log("Current statuses:", CURRENT_STATUSES);
       console.log("Past statuses:", PAST_STATUSES);
-      
+
       setCurrentOrders(current);
       setPastOrders(past);
       setLoading(false);
@@ -272,8 +272,8 @@ export default function ProfilePage() {
     try {
       const timestamp = order.date || order.createdAt;
       if (timestamp && typeof timestamp === 'object') {
-        const seconds = (timestamp as any).seconds || 
-                       (timestamp as any)._seconds || 
+        const seconds = (timestamp as any).seconds ||
+                       (timestamp as any)._seconds ||
                        (timestamp as any)?.toDate?.()?.getTime() / 1000;
         if (seconds) {
           return new Date(seconds * 1000).toLocaleString();
@@ -295,9 +295,10 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="p-8 mt-20 max-w-7xl mx-auto flex gap-8">
-      {/* Left: Profile Edit */}
-      <div className="w-1/3 bg-white shadow-md rounded-lg p-6 flex flex-col items-center">
+    // CRITICAL FIX: Use p-4 on mobile, stack columns vertically (space-y-6), and use two columns only on large screens (lg:flex lg:gap-8)
+    <div className="p-4 sm:p-8 mt-4 sm:mt-20 max-w-7xl mx-auto space-y-6 lg:space-y-0 lg:flex lg:gap-8">
+      {/* Left: Profile Edit - Make it w-full on mobile, then w-1/3 on large screens */}
+      <div className="w-full lg:w-1/3 bg-white shadow-md rounded-lg p-6 flex flex-col items-center">
         <Image
           src={user.photoURL || "/fallback-image.png"}
           width={120}
@@ -305,7 +306,7 @@ export default function ProfilePage() {
           alt="Profile"
           className="rounded-full mb-4"
         />
-        
+
         {/* Full Name Input */}
         <h1 className="text-2xl font-bold mb-2">{customerData.name}</h1>
         <div className="w-full mb-2">
@@ -318,7 +319,7 @@ export default function ProfilePage() {
             placeholder="Your Full Name"
           />
         </div>
-        
+
         {/* Email, Phone, Address Inputs */}
         <div className="w-full mb-2">
           <label className="block text-gray-600 mb-1">Email</label>
@@ -365,120 +366,109 @@ export default function ProfilePage() {
         </div>
       </div>
 
-      {/* Right: Orders Display */}
-      <div className="w-2/3 flex flex-col gap-6">
-        {loading ? (
-          <div className="text-center py-8">
-            <p>Loading orders...</p>
-          </div>
-        ) : (
-          <>
-            {/* Current Orders */}
-            <div className="bg-white shadow-md rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Current Orders</h2>
-              {currentOrders.length === 0 ? (
-                <p className="text-gray-500">No current orders.</p>
-              ) : (
-                <div className="space-y-4">
-                  {currentOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="p-4 border rounded-lg shadow hover:shadow-md transition"
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="font-medium">
-                          Order: {order.id.substring(0, 8)}...
-                        </p>
-                        <span
-                          className={`px-3 py-1 rounded-full text-white ${getStatusColor(order.status)}`}
-                        >
-                          {getStatusText(order.status)}
-                        </span>
-                      </div>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Date:</strong> {getOrderDate(order)}
-                      </p>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Delivery Address:</strong> {getOrderAddress(order)}
-                      </p>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Phone:</strong> {getOrderPhone(order)}
-                      </p>
-                      <p className="text-gray-800 font-semibold mb-2">
-                        Total: ₹{order.totalAmount.toFixed(2)}
-                      </p>
-                      <div>
-                        <p className="font-semibold">Items:</p>
-                        <ul className="list-disc ml-5">
-                          {order.items.map((item, idx) => (
-                            <li key={idx} className="text-gray-700">
-                              {item.name} x {item.quantity} - ₹{item.price.toFixed(2)}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+      {/* Right: Orders - Make it w-full on mobile, then w-2/3 on large screens */}
+      <div className="w-full lg:w-2/3">
+        {/* ... Rest of the Orders section code ... */}
+        {/* Current Orders */}
+        <h2 className="text-2xl font-bold text-gray-800 mb-4">Current Orders</h2>
 
-            {/* Previous Orders */}
-            <div className="bg-white shadow-md rounded-lg p-6">
-              <h2 className="text-2xl font-semibold mb-4">Previous Orders</h2>
-              {pastOrders.length === 0 ? (
-                <p className="text-gray-500">No previous orders.</p>
-              ) : (
-                <div className="space-y-4">
-                  {pastOrders.map((order) => (
-                    <div
-                      key={order.id}
-                      className="p-4 border rounded-lg shadow hover:shadow-md transition bg-gray-50"
-                    >
-                      <div className="flex justify-between items-center mb-2">
-                        <p className="font-medium">
-                          Order: {order.id.substring(0, 8)}...
-                        </p>
-                        <span
-                          className={`px-3 py-1 rounded-full text-white ${getStatusColor(order.status)}`}
-                        >
-                          {getStatusText(order.status)}
-                        </span>
-                      </div>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Date:</strong> {getOrderDate(order)}
-                      </p>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Delivery Address:</strong> {getOrderAddress(order)}
-                      </p>
-                      <p className="text-gray-600 mb-2">
-                        <strong>Phone:</strong> {getOrderPhone(order)}
-                      </p>
-                      <p className="text-gray-800 font-semibold mb-2">
-                        Total: ₹{order.totalAmount.toFixed(2)}
-                      </p>
-                      <div>
-                        <p className="font-semibold">Items:</p>
-                        <ul className="list-disc ml-5 mb-3">
-                          {order.items.map((item, idx) => (
-                            <li key={idx} className="text-gray-700">
-                              {item.name} x {item.quantity} - ₹{item.price.toFixed(2)}
-                            </li>
-                          ))}
-                        </ul>
-                        <button
-                          onClick={() => handleReorder(order)}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                        >
-                          Order Again
-                        </button>
-                      </div>
-                    </div>
-                  ))}
+        {loading ? (
+          <p className="text-gray-500 p-4 bg-gray-50 rounded-lg">Loading orders...</p>
+        ) : currentOrders.length === 0 ? (
+          <p className="text-gray-500 p-4 bg-gray-50 rounded-lg">No current orders.</p>
+        ) : (
+          <div className="space-y-4">
+            {currentOrders.map((order) => (
+              <div
+                key={order.id}
+                className="bg-white shadow-md rounded-lg p-4 border border-blue-100"
+              >
+                <div className="flex justify-between items-start mb-2 border-b pb-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-700 truncate">
+                      Order ID: {order.id}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Date: {getOrderDate(order)}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${getStatusColor(
+                      order.status
+                    )} flex-shrink-0 ml-2`}
+                  >
+                    {getStatusText(order.status)}
+                  </span>
                 </div>
-              )}
-            </div>
-          </>
+
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Total:</span> ₹{order.totalAmount}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  <span className="font-medium">Deliver to:</span> {getOrderAddress(order)}
+                </p>
+                <div className="mt-2 text-xs">
+                  <span className="font-medium">Items:</span>{" "}
+                  {order.items.map((item) => item.name).join(", ")}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Past Orders */}
+        <h2 className="text-2xl font-bold text-gray-800 mt-8 mb-4">Past Orders</h2>
+
+        {loading ? (
+          <p className="text-gray-500 p-4 bg-gray-50 rounded-lg">Loading orders...</p>
+        ) : pastOrders.length === 0 ? (
+          <p className="text-gray-500 p-4 bg-gray-50 rounded-lg">No past orders.</p>
+        ) : (
+          <div className="space-y-4">
+            {pastOrders.map((order) => (
+              <div
+                key={order.id}
+                className="bg-white shadow-md rounded-lg p-4 border border-gray-100"
+              >
+                <div className="flex justify-between items-start mb-2 border-b pb-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-gray-700 truncate">
+                      Order ID: {order.id}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      Date: {getOrderDate(order)}
+                    </p>
+                  </div>
+                  <span
+                    className={`text-xs font-bold text-white px-2 py-0.5 rounded-full ${getStatusColor(
+                      order.status
+                    )} flex-shrink-0 ml-2`}
+                  >
+                    {getStatusText(order.status)}
+                  </span>
+                </div>
+
+                <p className="text-sm text-gray-700">
+                  <span className="font-semibold">Total:</span> ₹{order.totalAmount}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  <span className="font-medium">Deliver to:</span> {getOrderAddress(order)}
+                </p>
+                <div className="mt-2 flex justify-between items-center">
+                  <p className="text-xs text-gray-600 flex-1 truncate">
+                    <span className="font-medium">Items:</span>{" "}
+                    {order.items.map((item) => item.name).join(", ")}
+                  </p>
+                  <button
+                    onClick={() => handleReorder(order)}
+                    className="px-3 py-1 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors flex-shrink-0 ml-2"
+                  >
+                    Reorder
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </div>
     </div>

@@ -49,19 +49,19 @@ export default function ProductsPage() {
         // Try without ordering first to debug
         const categoriesRef = collection(db, "categories");
         console.log("Categories reference created");
-        
+
         const snapshot = await getDocs(categoriesRef);
         console.log("Categories snapshot received:", snapshot.docs.length, "documents");
-        
+
         const categoryList: Category[] = [];
-        
+
         snapshot.docs.forEach((doc) => {
           const data = doc.data();
           console.log("Category document data:", {
             id: doc.id,
             data: data
           });
-          
+
           categoryList.push({
             id: doc.id,
             name: data.name || "",
@@ -70,14 +70,14 @@ export default function ProductsPage() {
             icon: data.icon
           });
         });
-        
+
         console.log("Processed categories list:", categoryList);
-        
+
         // Sort by order if order field exists
         if (categoryList.some(cat => cat.order !== 0)) {
           categoryList.sort((a, b) => a.order - b.order);
         }
-        
+
         setCategories(categoryList);
       } catch (error) {
         console.error("Failed to fetch categories:", error);
@@ -92,7 +92,7 @@ export default function ProductsPage() {
       }
       setCategoriesLoading(false);
     }
-    
+
     fetchCategories();
   }, []);
 
@@ -102,16 +102,16 @@ export default function ProductsPage() {
       setLoading(true);
       try {
         const snapshot = await getDocs(collection(db, "products"));
-        
+
         const productList: Product[] = snapshot.docs.map((doc) => {
           const data = doc.data();
           const price = data.price || 0;
-          
+
           let originalPrice;
           if (data.originalPrice !== undefined && data.originalPrice > price) {
             originalPrice = data.originalPrice;
           }
-          
+
           return {
             id: doc.id,
             name: data.name || "Unknown Product",
@@ -127,7 +127,7 @@ export default function ProductsPage() {
             brand: data.brand || ""
           };
         });
-        
+
         setProducts(productList);
       } catch (error) {
         console.error("Failed to fetch products:", error);
@@ -141,11 +141,11 @@ export default function ProductsPage() {
   const filteredProducts = products.filter(product => {
     // Search filter
     const searchLower = searchTerm.toLowerCase();
-    const matchesSearch = 
+    const matchesSearch =
       product.name.toLowerCase().includes(searchLower) ||
       (product.description && product.description.toLowerCase().includes(searchLower)) ||
       (product.brand && product.brand.toLowerCase().includes(searchLower));
-    
+
     // Category filter
     let matchesCategory = false;
     if (selectedCategory === "all") {
@@ -154,13 +154,13 @@ export default function ProductsPage() {
       // Match by category ID
       matchesCategory = product.category === selectedCategory;
     }
-    
+
     return matchesSearch && matchesCategory;
   });
 
   // Get selected category name for display
-  const selectedCategoryName = selectedCategory === "all" 
-    ? "All Products" 
+  const selectedCategoryName = selectedCategory === "all"
+    ? "All Products"
     : categories.find(cat => cat.id === selectedCategory)?.displayName || selectedCategory;
 
   // Get product count for each category
@@ -179,8 +179,8 @@ export default function ProductsPage() {
   ];
 
   // Visible categories (show all or first 6)
-  const visibleCategories = showAllCategories 
-    ? displayCategories 
+  const visibleCategories = showAllCategories
+    ? displayCategories
     : displayCategories.slice(0, 6);
 
   // Handle category selection
@@ -190,6 +190,7 @@ export default function ProductsPage() {
   };
 
   return (
+    // No change here, container is responsive
     <div className="min-h-screen bg-white">
       {/* Search and Categories Header */}
       <div className="bg-white border-b border-gray-200 sticky top-0 z-20">
@@ -207,7 +208,7 @@ export default function ProductsPage() {
               />
             </div>
           </div>
-          
+
           {/* Categories */}
           <div className="mt-2">
             <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
@@ -222,11 +223,11 @@ export default function ProductsPage() {
               >
                 All ({products.length})
               </button>
-              
+
               {/* Dynamic categories */}
               {visibleCategories.map((category) => {
                 const productCount = getProductCountForCategory(category.id);
-                
+
                 return (
                   <button
                     key={category.id}
@@ -245,7 +246,7 @@ export default function ProductsPage() {
                   </button>
                 );
               })}
-              
+
               {/* Show More/Less button if there are more than 6 categories */}
               {displayCategories.length > 6 && (
                 <button
@@ -270,7 +271,7 @@ export default function ProductsPage() {
             {searchTerm && ` for "${searchTerm}"`}
           </p>
         </div>
-        
+
         {/* Products Grid */}
         {loading ? (
           <ProductGridSkeleton />
@@ -283,8 +284,8 @@ export default function ProductsPage() {
                 </div>
                 <p className="text-gray-600 text-sm">No products found</p>
                 <p className="text-xs text-gray-400 mt-1">
-                  {searchTerm 
-                    ? `No results for "${searchTerm}" in ${selectedCategoryName.toLowerCase()}` 
+                  {searchTerm
+                    ? `No results for "${searchTerm}" in ${selectedCategoryName.toLowerCase()}`
                     : `Try selecting a different category`
                   }
                 </p>
@@ -298,19 +299,20 @@ export default function ProductsPage() {
                 )}
               </div>
             ) : (
+              // CRITICAL FIX: The grid is already responsive and will automatically use ProductCard's w-full
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
                 {filteredProducts.map((product) => {
                   // Find category name for this product
                   const productCategory = displayCategories.find(cat => cat.id === product.category);
                   const categoryName = productCategory?.name || "Uncategorized";
-                  
+
                   return (
-                    <ProductCard 
-                      key={product.id} 
+                    <ProductCard
+                      key={product.id}
                       product={{
                         ...product,
                         category: categoryName
-                      }} 
+                      }}
                     />
                   );
                 })}
@@ -326,6 +328,7 @@ export default function ProductsPage() {
 // Loading Skeleton Component
 function ProductGridSkeleton() {
   return (
+    // CRITICAL FIX: The grid is already responsive and will fill width appropriately
     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
       {[...Array(10)].map((_, i) => (
         <div key={i} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -335,16 +338,16 @@ function ProductGridSkeleton() {
               <div className="h-2 w-10 bg-gray-200 rounded"></div>
             </div>
           </div>
-          
-          <div className="p-2">
+
+          <div className="p-2 sm:p-3"> {/* CRITICAL FIX: Reduced mobile padding to p-2 */}
             <div className="h-3 bg-gray-200 rounded mb-1.5 animate-pulse"></div>
             <div className="h-2.5 bg-gray-200 rounded w-4/5 mb-2 animate-pulse"></div>
-            
+
             <div className="flex items-center gap-1 mb-2">
               <div className="h-3 w-10 bg-gray-200 rounded animate-pulse"></div>
               <div className="h-2.5 w-8 bg-gray-200 rounded animate-pulse"></div>
             </div>
-            
+
             <div className="h-7 w-full bg-gray-200 rounded animate-pulse"></div>
           </div>
         </div>

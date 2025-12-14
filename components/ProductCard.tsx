@@ -57,10 +57,12 @@ export default function ProductCard({ product }: ProductCardProps) {
   };
 
   return (
-    <div className="w-60 bg-white rounded-lg overflow-hidden border border-gray-100 shadow-sm">
+    // CRITICAL FIX: Removed w-60. Let the grid system in products/page.tsx manage the width.
+    <div className="w-full bg-white rounded-lg overflow-hidden border border-gray-100 shadow-sm">
 
       {/* IMAGE SECTION */}
-      <div className="relative h-48 bg-gray-50">
+      {/* CRITICAL FIX: Decreased height on mobile for compactness (h-40) and kept h-48 for larger screens (sm:h-48) */}
+      <div className="relative h-40 sm:h-48 bg-gray-50">
 
         {/* DISCOUNT RIBBON */}
         {isDiscounted && (
@@ -75,7 +77,7 @@ export default function ProductCard({ product }: ProductCardProps) {
             src={product.imageUrl}
             alt={product.name}
             fill
-            sizes="15rem"
+            sizes="(max-width: 640px) 50vw, 15rem" // Improved sizes attribute
             className="object-cover"
           />
         ) : (
@@ -99,8 +101,9 @@ export default function ProductCard({ product }: ProductCardProps) {
             ADD
           </button>
         ) : (
+          // CRITICAL FIX: Make the quantity control width smaller on mobile (w-20) and a bit larger on desktop (sm:w-24)
           <div className="absolute bottom-2 right-2 flex items-center justify-between 
-                          bg-pink-500 text-white rounded w-24 text-sm font-bold 
+                          bg-pink-500 text-white rounded w-20 sm:w-24 text-sm font-bold 
                           shadow-lg border-2 border-pink-500">
             <button
               onClick={handleDecrement}
@@ -120,20 +123,20 @@ export default function ProductCard({ product }: ProductCardProps) {
       </div>
 
       {/* DETAILS SECTION */}
-      <div className="p-3 pt-0">
+      <div className="p-2 sm:p-3 pt-0"> {/* CRITICAL FIX: Reduced mobile padding to p-2 */}
 
         {/* PRICE ROW */}
         <div className="flex items-center mt-2 mb-1">
-          <span className="inline-flex items-center px-4 py-2 mr-2 rounded-xl 
-                           bg-white shadow-md border border-green-200">
-            <span className="text-sm text-green-700 mr-1">₹</span>
-            <span className="text-xl font-extrabold text-green-700">
+          <span className="inline-flex items-center px-3 py-1 mr-2 rounded-xl 
+                           bg-white shadow-md border border-green-200"> {/* CRITICAL FIX: Reduced padding to px-3 py-1 */}
+            <span className="text-xs sm:text-sm text-green-700 mr-1">₹</span> {/* CRITICAL FIX: Reduced font size to xs on mobile */}
+            <span className="text-lg sm:text-xl font-extrabold text-green-700"> {/* CRITICAL FIX: Reduced font size to lg on mobile */}
               {product.price}
             </span>
           </span>
 
           {isDiscounted && (
-            <span className="text-sm text-gray-400 line-through">
+            <span className="text-xs sm:text-sm text-gray-400 line-through"> {/* CRITICAL FIX: Reduced font size to xs on mobile */}
               ₹{product.originalPrice}
             </span>
           )}
@@ -148,13 +151,13 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
 
         {/* PRODUCT NAME */}
-        <h3 className="text-base font-bold text-gray-800 leading-snug mb-1">
+        <h3 className="text-sm sm:text-base font-bold text-gray-800 leading-snug mb-1"> {/* CRITICAL FIX: Reduced font size to sm on mobile */}
           {product.name}
         </h3>
 
         {/* WEIGHT */}
         {product.weight && (
-          <p className="text-sm text-gray-500">
+          <p className="text-xs sm:text-sm text-gray-500"> {/* CRITICAL FIX: Reduced font size to xs on mobile */}
             {product.weight} gram
           </p>
         )}

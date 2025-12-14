@@ -10,10 +10,14 @@ interface ProductCardProps {
     name: string;
     price: number;
     originalPrice?: number;
+    discountPercentage?: number; // Added this property
+    discountText?: string; // Added this property
     imageUrl?: string;
     weight?: string;
     brand?: string;
     isInStock?: boolean;
+    category?: string; // Added this property
+    categoryId?: string; // Added this property
   };
 }
 

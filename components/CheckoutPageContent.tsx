@@ -1,13 +1,12 @@
-// /components/CheckoutPageContent.tsx
 "use client";
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCart } from "./CartContext"; // adjust path if needed
+import { useCart } from "./CartContext";
 import { getAuth } from "firebase/auth";
-import { getAreaCode } from "../utils/getAreaCode"; // adjust path if needed
-import { doc, setDoc, collection } from "firebase/firestore"; // Added collection import
-import { db } from "@/lib/firebase"; // adjust path if needed
+import { getAreaCode } from "../utils/getAreaCode";
+import { doc, setDoc, collection } from "firebase/firestore";
+import { db } from "@/lib/firebase";
 
 export default function CheckoutPageContent() {
   const router = useRouter();
@@ -20,7 +19,7 @@ export default function CheckoutPageContent() {
     handlingCharge,
     smallCartCharge,
     grandTotal,
-    clearCart, // Add this function to your CartContext if not already there
+    clearCart,
   } = useCart();
 
   const [user, setUser] = useState<any>(null);
@@ -72,7 +71,6 @@ export default function CheckoutPageContent() {
         (error) => {
           console.warn("Location permission denied or error:", error);
           setIsLoading(false);
-          // Location is optional, so don't show alert
         },
         {
           enableHighAccuracy: true,
@@ -113,7 +111,6 @@ export default function CheckoutPageContent() {
     if (!user) return null;
     
     try {
-      // Save to user's orders subcollection
       const ordersRef = doc(collection(db, "users", user.uid, "orders"));
       await setDoc(ordersRef, {
         ...orderData,
@@ -139,18 +136,15 @@ export default function CheckoutPageContent() {
       return;
     }
 
-    // Only require address for delivery option
     if (deliveryOption === "delivery") {
       if (!address) {
         alert("Please enter delivery address");
         return;
       }
-      // Location is optional now, no alert for missing location
       if (!areaCode) {
         console.warn("Area code not available, but proceeding anyway");
       }
     } else {
-      // For pickup, set default values
       setLocation({ lat: 0, lng: 0 });
       setAreaCode("PICKUP");
     }
@@ -160,7 +154,6 @@ export default function CheckoutPageContent() {
       return;
     }
 
-    // Handle payment based on method
     if (paymentMethod === "UPI") {
       alert("UPI payment is currently not working. Please use Cash on Delivery.");
       return;
@@ -169,10 +162,8 @@ export default function CheckoutPageContent() {
     setIsLoading(true);
 
     try {
-      // 1. Save user profile data (address, phone)
       await saveUserProfile();
 
-      // 2. Prepare order data
       const orderData = {
         userId: user.uid,
         userName: name,
@@ -187,7 +178,7 @@ export default function CheckoutPageContent() {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
-          image: item.image || "",
+          imageUrl: item.imageUrl || "", // FIXED: Changed from image to imageUrl
         })),
         paymentMethod,
         subtotal,
@@ -199,21 +190,17 @@ export default function CheckoutPageContent() {
         createdAt: new Date().toISOString(),
       };
 
-      // 3. Save order to Firestore
       const orderId = await saveOrderToFirestore(orderData);
       
       if (orderId) {
         console.log("ORDER PLACED", orderData);
         
-        // 4. Clear the cart
         if (clearCart) {
           clearCart();
         }
         
-        // 5. Show success message
         alert(`Order #${orderId} placed successfully! ${deliveryOption === "delivery" ? 'Delivery' : 'Pickup'} confirmed.`);
         
-        // 6. Redirect to products page
         router.push("/");
       } else {
         alert("Failed to save order. Please try again.");
@@ -226,7 +213,6 @@ export default function CheckoutPageContent() {
     }
   };
 
-  // Function to manually fetch delivery location
   const getDeliveryLocation = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
@@ -262,7 +248,6 @@ export default function CheckoutPageContent() {
     <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-6">Checkout</h1>
 
-      {/* Delivery/Pickup Option */}
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
         <h2 className="font-bold text-lg mb-4 text-gray-800">Order Type</h2>
         <div className="grid grid-cols-2 gap-4">
@@ -300,12 +285,10 @@ export default function CheckoutPageContent() {
         </div>
       </div>
 
-      {/* User Info in Bag Round Style */}
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
         <h2 className="font-bold text-lg mb-4 text-gray-800">Customer Information</h2>
         
         <div className="space-y-4">
-          {/* Name Input */}
           <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Full Name *
@@ -319,7 +302,6 @@ export default function CheckoutPageContent() {
             />
           </div>
 
-          {/* Phone Input */}
           <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Phone Number *
@@ -334,7 +316,6 @@ export default function CheckoutPageContent() {
             />
           </div>
 
-          {/* Delivery Address Section - Only shown for delivery */}
           {deliveryOption === "delivery" && (
             <>
               <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
@@ -354,7 +335,6 @@ export default function CheckoutPageContent() {
                 </p>
               </div>
 
-              {/* Delivery Location Display */}
               <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
                 <div className="flex justify-between items-center mb-1">
                   <label className="block text-sm font-medium text-gray-700">
@@ -391,7 +371,6 @@ export default function CheckoutPageContent() {
                 )}
               </div>
 
-              {/* Area Code Display */}
               <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
                 <label className="block text-sm font-medium text-gray-700 mb-1">
                   Delivery Area Code
@@ -413,7 +392,6 @@ export default function CheckoutPageContent() {
             </>
           )}
 
-          {/* Pickup Information - Only shown for pickup */}
           {deliveryOption === "pickup" && (
             <div className="rounded-xl border border-blue-200 bg-blue-50 p-4">
               <div className="flex items-start">
@@ -436,7 +414,6 @@ export default function CheckoutPageContent() {
             </div>
           )}
 
-          {/* User Email (Read-only) */}
           {user?.email && (
             <div className="rounded-xl border border-gray-300 p-3 bg-gray-50">
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -448,7 +425,6 @@ export default function CheckoutPageContent() {
         </div>
       </div>
 
-      {/* Bill Summary in Bag Round Style */}
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
         <h2 className="font-bold text-lg mb-4 text-gray-800">
           {deliveryOption === "delivery" ? "Bill Summary" : "Pickup Order Summary"}
@@ -499,7 +475,6 @@ export default function CheckoutPageContent() {
         </div>
       </div>
 
-      {/* Payment in Bag Round Style */}
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-6 border border-gray-200">
         <h2 className="font-bold text-lg mb-4 text-gray-800">Payment Method</h2>
         <div className="space-y-3">
@@ -530,7 +505,6 @@ export default function CheckoutPageContent() {
         </div>
       </div>
 
-      {/* Place Order Button */}
       <button
         onClick={placeOrder}
         disabled={isLoading}
